@@ -64,7 +64,7 @@ except ImportError:  # pragma: no cover
 
 
 from ykt_llm import (
-    SYSTEM_PROMPT, ask_llm_blocking, build_user_prompt, clip, deep_merge,
+    SYSTEM_PROMPT, api_key_source, ask_llm_blocking, build_user_prompt, clip, deep_merge,
     load_dsh_key, mmss, normalize_llm_answer, parse_llm_json, resolve_api_key,
 )
 
@@ -1523,7 +1523,10 @@ async def watch(cfg: dict, args) -> None:
     api_key = resolve_api_key(cfg, args.api_key)
     if not api_key:
         log("未找到模型 API Key：只抓题、不生成答案。可设置环境变量 "
-            f"{cfg['llm']['api_key_env']} 或使用 --api-key。")
+            f"{cfg['llm']['api_key_env']}、运行 设置APIKey.bat，或使用 --api-key。")
+    else:
+        log(f"模型：{cfg['llm']['model']} @ {cfg['llm']['base_url']}"
+            f"（Key 来源：{api_key_source(cfg, args.api_key)}）")
 
     async with async_playwright() as p:
         context, page = await open_browser(p, headless=args.headless,

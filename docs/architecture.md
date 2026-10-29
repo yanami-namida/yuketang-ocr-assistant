@@ -119,6 +119,7 @@ Chromium 对最小化页面暂停渲染，纯 DOM 题不受影响，但图片题
 | --- | --- |
 | `tests/test_dom.py` | 选项锚点、图片题 OCR 绑定、提交按钮在容器外、重绘后重定位、禁用/无效点击、只填不交等 18 项 |
 | `tests/test_ocr.py` | 编码解码（UTF-8/GBK/UTF-16）、圆钮污染、页脚按钮误判、`丨P → IP` 等 12 项 |
+| `tests/test_llm.py` | Key 优先级（参数 → config → 环境变量 → DSH 凭据）、`mask_key`、配置读写回环 9 项 |
 | `tests/test_http.py` | HTTP 版的解析与上传（需要 `requirements-http.txt`） |
 
 DOM 用例用本地 HTML 夹具 + mock 掉 OCR，不联网、不需要登录；`tests/test_dom.py` 里也保留了真实漏抓样本的 OCR 坐标，作为回归数据。

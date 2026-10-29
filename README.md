@@ -41,15 +41,20 @@
 ├─ ykt_http_menu.py        HTTP 版双击菜单
 ├─ 启动雨课堂助手.bat        浏览器版双击菜单
 ├─ 启动雨课堂HTTP版.bat      HTTP 版双击入口
+├─ 设置APIKey.bat           配模型 Key（双击粘贴，写进本机 config.json）
 ├─ config.example.json     配置样例（复制成 config.json 后改）
 ├─ requirements.txt        浏览器版依赖
 ├─ requirements-http.txt   HTTP 版依赖
+├─ tools/
+│  └─ set_api_key.py       设置 Key 的命令行脚本（bat 只是包装）
 ├─ docs/
+│  ├─ api-key.md           怎么配 Key：三种存法、换服务商、报错对照
 │  ├─ architecture.md      实现说明：链路、抓题策略、踩过的坑
 │  └─ overlay-demo.png     浮层效果图
 └─ tests/
    ├─ test_dom.py          抓题 / 答案绑定 / 点击提交（18 项）
    ├─ test_ocr.py          编码、圆钮、页脚按钮等 OCR 解析（12 项）
+   ├─ test_llm.py          Key 优先级 / 配置读写（9 项）
    └─ test_http.py         HTTP 版（需要 requirements-http.txt）
 ```
 
@@ -66,11 +71,19 @@
 ```powershell
 cd 雨课堂
 python -m pip install -r requirements.txt
+
+# 可选但强烈建议：配一把模型 Key（也能直接双击 设置APIKey.bat）
+python tools\set_api_key.py
 ```
+
+Key 的三种存法、换服务商、报错对照都在 [`docs/api-key.md`](docs/api-key.md)。
 
 ## 快速开始（浏览器版）
 
 ```powershell
+# 0. 配 Key（一次就够；没有 Key 也能跑到第 2 步，只是不出答案）
+python tools\set_api_key.py
+
 # 1. 扫码登录一次，登录态存进 edge_profile\
 python ykt_watcher.py --login
 
@@ -152,7 +165,7 @@ python ykt_watcher.py --mock --mock-query "t=20&auto=1"    # 20 秒后自动切�
 
 ## 配置
 
-首次运行会自动生成 `config.json`（也可以把 `config.example.json` 复制过去改），改完重启生效。常用项：
+首次运行会自动生成 `config.json`（也可以把 `config.example.json` 复制过去改），改完重启生效。模型 Key 用 `设置APIKey.bat` 写进 `llm.api_key`，也可以手改或改用环境变量（见下一节）。常用项：
 
 | 键 | 默认 | 说明 |
 | --- | --- | --- |
@@ -166,15 +179,21 @@ python ykt_watcher.py --mock --mock-query "t=20&auto=1"    # 20 秒后自动切�
 | `dump_on_miss` / `dump_cooldown` | 45 / 180 | 连续多久没抓到就存快照 / 两次快照最小间隔 |
 | `save_screenshots` | true | 抓题时是否截图到 `shots\` |
 | `selectors` | 见样例 | 题目容器候选选择器，抓不到时优先补这里 |
-| `llm.*` | DeepSeek | `base_url` / `model` / `api_key_env` / `timeout` 等 |
+| `llm.*` | DeepSeek | `base_url` / `model` / `api_key` / `api_key_env` / `timeout` 等 |
 
 ## 模型 Key
 
-按顺序尝试：`--api-key` 参数 → 环境变量 `DEEPSEEK_API_KEY`（或 `llm.api_key_env` 指定的名字）→ DSH 凭据 `~/.dsh/.credentials.yaml`。
+项目里**不附带任何 Key**。最省事的配法：双击 **`设置APIKey.bat`**（或运行 `python tools\set_api_key.py`），粘贴 Key → 写进本机 `config.json` → 当场调接口校验一次。完整说明见 [`docs/api-key.md`](docs/api-key.md)。
+
+按顺序尝试：`--api-key` 参数 → `config.json` 的 `llm.api_key` → 环境变量 `DEEPSEEK_API_KEY`（或 `llm.api_key_env` 指定的名字）→ DSH 凭据 `~/.dsh/.credentials.yaml`。启动日志会打印实际用的是哪一把：
+
+```text
+模型：deepseek-chat @ https://api.deepseek.com/v1（Key 来源：config.json 的 llm.api_key）
+```
 
 没有 Key 也能跑：只抓题、显示题目和倒计时，不生成答案。接口按 OpenAI 兼容的 `/chat/completions` 调用，换本地 ollama 或其它网关只需改 `base_url` / `model`。
 
-> 别把 Key 写在命令行上（会留在进程列表和命令历史里），优先用环境变量。
+> Key 只存在本机：`config.json` 在 `.gitignore` 里，不会被提交；`--show` 只显示打码后的 Key；泄露了就去服务商控制台吊销重建。
 
 ## 产出文件
 
@@ -189,7 +208,7 @@ python ykt_watcher.py --mock --mock-query "t=20&auto=1"    # 20 秒后自动切�
 ## 测试
 
 ```powershell
-python -m unittest tests.test_ocr tests.test_dom -v   # 30 项，离线可跑
+python -m unittest tests.test_ocr tests.test_dom tests.test_llm -v   # 39 项，离线可跑
 python -m unittest tests.test_http -v                 # 需要 requirements-http.txt
 ```
 

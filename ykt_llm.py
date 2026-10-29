@@ -64,9 +64,13 @@ def load_dsh_key(key_name: str = "DEEPSEEK_API_KEY") -> str | None:
 
 
 def resolve_api_key(cfg: dict, explicit: str | None) -> str | None:
+    """按优先级取 key：--api-key 参数 → config.json 的 llm.api_key → 环境变量 → DSH 凭据。"""
     if explicit:
         return explicit.strip()
     llm = cfg["llm"]
+    saved = (llm.get("api_key") or "").strip()
+    if saved:
+        return saved
     env_name = llm.get("api_key_env") or "DEEPSEEK_API_KEY"
     key = os.environ.get(env_name)
     if key:
@@ -74,6 +78,21 @@ def resolve_api_key(cfg: dict, explicit: str | None) -> str | None:
     if llm.get("allow_dsh_credentials", True):
         return load_dsh_key(env_name)
     return None
+
+
+def api_key_source(cfg: dict, explicit: str | None) -> str:
+    """说明 key 是从哪儿来的，用于启动日志和排查「为什么用的是旧 key」。"""
+    if explicit:
+        return "--api-key 参数"
+    llm = cfg["llm"]
+    if (llm.get("api_key") or "").strip():
+        return "config.json 的 llm.api_key"
+    env_name = llm.get("api_key_env") or "DEEPSEEK_API_KEY"
+    if os.environ.get(env_name):
+        return f"环境变量 {env_name}"
+    if llm.get("allow_dsh_credentials", True) and load_dsh_key(env_name):
+        return "DSH 凭据 ~/.dsh/.credentials.yaml"
+    return "未配置"
 
 
 def build_user_prompt(q: dict) -> str:
