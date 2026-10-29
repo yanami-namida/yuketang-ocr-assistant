@@ -8,7 +8,7 @@ Cookie 登录态 → HTTP 读课堂 → WebSocket 收发题事件 → HTTP 取�
 ## 1. 快速开始（命令）
 
 ```powershell
-cd D:\_LLMWorkplace\__tool\雨课堂
+cd <解压后的项目目录>          # 例如 cd 雨课堂
 
 # 只读：验证登录态 + 列出正在上的课（不签到、不进课堂）
 .\.venv-http\Scripts\python.exe -B ykt_http.py --list-lessons
@@ -54,7 +54,7 @@ cd D:\_LLMWorkplace\__tool\雨课堂
 
 ## 4. 环境与登录态
 
-本目录已创建独立环境 `.venv-http`。迁移到其它机器：
+本目录**不附带**虚拟环境，第一次用先建一个（放在项目里，已被 `.gitignore` 忽略）：
 
 ```powershell
 python -m venv .venv-http
