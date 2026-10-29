@@ -1,0 +1,42 @@
+{
+  "url": "https://changjiang.yuketang.cn/web/",
+  "poll_interval": 2.5,
+  "heartbeat": 0,
+  "auto_enter": true,
+  "auto_fill": false,
+  "auto_submit": false,
+  "ocr": true,
+  "fill_gap": 0.18,
+  "submit_delay": 0.4,
+  "duration_min": 45,
+  "state_repeat": 300,
+  "dump_on_miss": 45,
+  "dump_cooldown": 180,
+  "question_gone_reset": 20,
+  "answer_cache_ttl": 1800,
+  "low_time_warn": [120, 60, 30],
+  "sound": true,
+  "save_screenshots": true,
+  "overlay": true,
+  "selectors": [
+    "[class*='question']",
+    "[class*='problem']",
+    "[class*='exercise']",
+    "[class*='quiz']",
+    "[class*='subject']",
+    "[class*='topic']",
+    "[class*='answer']",
+    "[class*='el-dialog']",
+    "[class*='ant-modal']"
+  ],
+  "llm": {
+    "base_url": "https://api.deepseek.com/v1",
+    "model": "deepseek-chat",
+    "api_key_env": "DEEPSEEK_API_KEY",
+    "allow_dsh_credentials": false,
+    "temperature": 0.2,
+    "max_tokens": 600,
+    "timeout": 60,
+    "reasoning_effort": null
+  }
+}

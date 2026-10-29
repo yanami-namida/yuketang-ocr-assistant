@@ -1,0 +1,4 @@
+# 浏览器版（ykt_watcher.py）依赖：需要本机已安装 Microsoft Edge + Windows 10/11
+playwright>=1.40
+pillow>=10.0
+requests>=2.31

@@ -1,0 +1,23 @@
+# ---- 登录态（等同账号，绝不提交 / 外发）----
+edge_profile/
+ykt_state.json
+
+# ---- 个人数据：题目、答案、截图、日志 ----
+answers.jsonl
+ykt_watch.log
+watch_stdout.log
+watch_stderr.log
+shots/
+dump/
+dump_now
+
+# ---- 运行产物 ----
+__pycache__/
+*.pyc
+config.json
+config.http.json
+.venv*/
+http_answers.jsonl
+http_submissions.jsonl
+http_submissions.lock
+ykt_http.log

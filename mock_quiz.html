@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>模拟课堂 · 雨课堂弹题</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh;
+    font-family: "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+    background: linear-gradient(135deg, #14202e 0%, #1d2b3a 55%, #223244 100%);
+    color: #dfe7f2;
+  }
+  .slide {
+    max-width: 980px; margin: 40px auto; padding: 34px 40px;
+    background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08);
+    border-radius: 14px; line-height: 1.9;
+  }
+  .slide h1 { font-size: 24px; margin: 0 0 6px; color: #eaf2ff; }
+  .slide .sub { color: #7e93ab; font-size: 13px; margin-bottom: 22px; }
+  .slide p { color: #b9c8da; font-size: 15px; }
+  .slide code { color: #ffd166; font-size: 14px; }
+
+  .question-panel {
+    position: fixed; right: 36px; top: 60px; width: 580px;
+    background: #1b2432; border: 1px solid #38506c; border-radius: 12px;
+    box-shadow: 0 20px 50px rgba(0,0,0,.55); padding: 18px 22px 16px;
+    z-index: 20;
+  }
+  .q-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .q-type {
+    font-size: 12px; color: #9ec5ff; background: #24364f;
+    padding: 2px 9px; border-radius: 10px;
+  }
+  .count-down { font-family: Consolas, monospace; font-size: 15px; color: #ffd166; }
+  .count-down.urgent { color: #ff6b6b; }
+  .question-title { font-size: 16px; line-height: 1.7; color: #eaf1fb; margin: 4px 0 12px; }
+  .option-list { list-style: none; margin: 0; padding: 0; }
+  .option-item {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 8px 10px; margin-bottom: 6px; border-radius: 7px;
+    background: #202b3b; border: 1px solid #2c3a4e; cursor: pointer;
+  }
+  .option-item:hover { border-color: #4a6c96; }
+  .option-item.selected { border-color: #4ade80; background: #1f3b2c; }
+  .option-item.selected .option-label { background: #2f7d4f; color: #d9ffe7; }
+  .submit-btn[disabled] { background: #3a4658; cursor: not-allowed; }
+  .option-label {
+    flex: 0 0 22px; height: 22px; line-height: 22px; text-align: center;
+    background: #2c3d55; border-radius: 50%; font-size: 13px; color: #a9c8f0;
+  }
+  .option-text { font-size: 14.5px; color: #d5dfec; line-height: 1.6; }
+  .panel-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; }
+  .tip { color: #7f92a8; font-size: 12px; }
+  .submit-btn {
+    background: #2f6feb; color: #fff; border: 0; border-radius: 7px;
+    padding: 8px 26px; font-size: 14px; cursor: pointer;
+  }
+  .submit-btn:hover { background: #3d7cf7; }
+</style>
+</head>
+<body>
+  <div class="slide">
+    <h1>第 3 讲 · 数据库系统概论</h1>
+    <div class="sub">长江雨课堂 · 本地模拟页面（仅用于测试抓题程序，与真实站点无关）</div>
+    <p>本节讨论关系模型中的键、完整性约束与范式。课堂中会随时弹出练习题。</p>
+    <p><code>提示：这是本地文件 mock_quiz.html，不会向任何服务器发送数据。</code></p>
+    <p style="margin-top:26px;color:#6f8299;font-size:13px">
+      测试用：<br>
+      · 倒计时结束后若带 <code>?auto=1</code>，会自动切到第 2 题（多选题），用于验证"新题识别"。<br>
+      · 刷新页面并修改 <code>?t=20</code> 可改第一题倒计时秒数。
+    </p>
+  </div>
+
+  <div class="question-panel" id="panel">
+    <div class="q-head">
+      <span class="q-type" id="qtype">单选题</span>
+      <span class="count-down" id="countdown">剩余时间 01:30</span>
+    </div>
+    <div class="question-title" id="qtitle"></div>
+    <ul class="option-list" id="options"></ul>
+    <div class="panel-foot">
+      <span class="tip" id="tip">答题后点击提交</span>
+      <button class="submit-btn" id="submit">提交</button>
+    </div>
+  </div>
+
+<script>
+  const params = new URLSearchParams(location.search);
+  let seconds = parseInt(params.get('t') || '90', 10);
+  const autoNext = params.get('auto') === '1';
+
+  const QUESTIONS = [
+    {
+      type: '单选题',
+      title: '1. 在关系数据库中，能够唯一标识表中每一行记录的约束是（　）。',
+      options: [
+        ['A', '外键（Foreign Key）'],
+        ['B', '主键（Primary Key）'],
+        ['C', '唯一索引（Unique Index）'],
+        ['D', '检查约束（Check Constraint）'],
+      ],
+    },
+    {
+      type: '多选题',
+      title: '2. 下列哪些属于关系数据库的完整性约束？（多选）',
+      options: [
+        ['A', '实体完整性'],
+        ['B', '参照完整性'],
+        ['C', '用户定义完整性'],
+        ['D', '页面完整性'],
+      ],
+    },
+  ];
+
+  let index = 0;
+  const qtypeEl = document.getElementById('qtype');
+  const titleEl = document.getElementById('qtitle');
+  const optionsEl = document.getElementById('options');
+  const cdEl = document.getElementById('countdown');
+
+  const state = { selected: [] };
+  const multi = () => QUESTIONS[index].type.indexOf('多选') >= 0;
+
+  function syncState() {
+    window.__mockState = { index, type: QUESTIONS[index].type, selected: state.selected.slice() };
+  }
+
+  function render() {
+    const q = QUESTIONS[index];
+    qtypeEl.textContent = q.type;
+    titleEl.textContent = q.title;
+    optionsEl.innerHTML = '';
+    state.selected = [];
+    for (const [label, text] of q.options) {
+      const li = document.createElement('li');
+      li.className = 'option-item';
+      li.dataset.label = label;
+      const lab = document.createElement('span');
+      lab.className = 'option-label';
+      lab.textContent = label;
+      const body = document.createElement('span');
+      body.className = 'option-text';
+      body.textContent = text;
+      li.appendChild(lab);
+      li.appendChild(body);
+      li.addEventListener('click', () => {
+        if (!multi()) {
+          // 单选：先清空再选中
+          for (const other of optionsEl.children) other.classList.remove('selected');
+          state.selected = [label];
+        } else {
+          const i = state.selected.indexOf(label);
+          if (i >= 0) { state.selected.splice(i, 1); li.classList.remove('selected'); }
+          else { state.selected.push(label); li.classList.add('selected'); }
+        }
+        if (!multi()) li.classList.add('selected');
+        syncState();
+        document.getElementById('tip').textContent =
+          '已选：' + (state.selected.slice().sort().join('') || '无') + ' · 可修改后提交';
+      });
+      optionsEl.appendChild(li);
+    }
+    const btn = document.getElementById('submit');
+    btn.disabled = false;
+    document.getElementById('tip').textContent = '第 ' + (index + 1) + ' 题 · 答题后点击提交';
+    syncState();
+  }
+
+  function tick() {
+    const m = String(Math.floor(seconds / 60)).padStart(2, '0');
+    const s = String(seconds % 60).padStart(2, '0');
+    cdEl.textContent = '剩余时间 ' + m + ':' + s;
+    cdEl.classList.toggle('urgent', seconds <= 30);
+    if (seconds <= 0) {
+      if (autoNext && index === 0) {
+        index = 1;
+        seconds = 90;
+        render();
+        return;
+      }
+      cdEl.textContent = '剩余时间 00:00（已结束）';
+      return;
+    }
+    seconds -= 1;
+  }
+
+  document.getElementById('submit').addEventListener('click', () => {
+    if (!state.selected.length) {
+      document.getElementById('tip').textContent = '（模拟）还没选答案，先点一个选项';
+      return;
+    }
+    window.__mockSubmit = {
+      index,
+      type: QUESTIONS[index].type,
+      selected: state.selected.slice().sort(),
+      at: new Date().toISOString(),
+    };
+    document.getElementById('tip').textContent =
+      '（模拟）已提交：' + state.selected.slice().sort().join('') + '，等待老师下一题…';
+  });
+
+  render();
+  tick();
+  setInterval(tick, 1000);
+</script>
+</body>
+</html>

@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>雨课堂图片题模拟页</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #0f1420; color: #e6edf7;
+               font-family: "Microsoft YaHei", system-ui, sans-serif; }
+  .wrap { display: flex; justify-content: center; padding: 18px 24px; }
+  .panel { background: #1b2333; border: 1px solid #2b3648; border-radius: 12px;
+           padding: 16px; width: 900px; }
+  .bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .tag { background: #24406b; color: #9cc6ff; border-radius: 999px; padding: 3px 10px; font-size: 13px; }
+  .cd { color: #ffd166; font-variant-numeric: tabular-nums; font-weight: 700; }
+  .slide { width: 100%; display: block; border-radius: 8px; background: #fff; }
+  .tip { color: #8ea0bb; font-size: 13px; margin-top: 10px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="panel" id="panel">
+    <div class="bar">
+      <span class="tag">单选题</span>
+      <span class="cd" id="cd">剩余时间 02:00</span>
+    </div>
+    <img class="slide" id="slide" src="shots/_cover.png" alt="题目图片">
+    <div class="tip">这是本地模拟页：题目只有一张图，没有文字选项，用来验证 OCR 链路。</div>
+  </div>
+</div>
+<script>
+  const total = new URLSearchParams(location.search).get('t') || 120;
+  let left = parseInt(total, 10);
+  const cd = document.getElementById('cd');
+  function tick() {
+    const m = String(Math.floor(left / 60)).padStart(2, '0');
+    const s = String(left % 60).padStart(2, '0');
+    cd.textContent = `剩余时间 ${m}:${s}`;
+    if (left > 0) { left -= 1; setTimeout(tick, 1000); }
+  }
+  tick();
+</script>
+</body>
+</html>
