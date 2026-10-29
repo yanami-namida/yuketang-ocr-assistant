@@ -1,0 +1,14 @@
+# 批处理必须用 CRLF，否则 cmd 解析 if/goto 偶发失败；其余文本统一 LF
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+*.py text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.html text eol=lf
+*.txt text eol=lf
+*.gitignore text eol=lf
+
+# 二进制文件不要做换行转换
+*.png binary
+*.zip binary
+.gitattributes text eol=lf
