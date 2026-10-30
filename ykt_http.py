@@ -36,7 +36,7 @@ BASE_DIR = Path(__file__).resolve().parent
 DEFAULT_CONFIG = {
     "duration_min": 45,
     "llm": {"base_url": "https://api.deepseek.com/v1", "model": "deepseek-chat",
-            "api_key_env": "DEEPSEEK_API_KEY", "allow_dsh_credentials": True,
+            "api_key_env": "DEEPSEEK_API_KEY", "allow_dsh_credentials": False,
             "temperature": 0.2, "max_tokens": 600, "timeout": 60},
     "http": {"base": "https://changjiang.yuketang.cn", "lesson_id": "",
              "state_file": "ykt_state.json", "timeout": 15, "reconnect_delay": 3,

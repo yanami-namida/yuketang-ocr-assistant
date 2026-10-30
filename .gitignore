@@ -21,3 +21,17 @@ http_answers.jsonl
 http_submissions.jsonl
 http_submissions.lock
 ykt_http.log
+
+# 本机密钥、编辑器和构建产物
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.log
+.idea/
+.vscode/
+.pytest_cache/
+build/
+dist/
+*.egg-info/

@@ -7,8 +7,28 @@ import os
 import re
 import time
 from pathlib import Path
+from urllib.parse import urlsplit, urlunsplit
 
 import requests
+
+
+def normalize_base_url(value: str) -> str:
+    """接受基础地址或完整 Chat Completions 地址，统一为基础地址。"""
+    url = urlsplit(value.strip().rstrip("/"))
+    if (url.scheme not in ("http", "https") or not url.hostname
+            or url.username or url.password or url.query or url.fragment):
+        raise ValueError("API 地址必须是 HTTP(S) 地址，不能包含账号、查询参数或片段")
+    path = url.path.rstrip("/")
+    suffix = "/chat/completions"
+    if path.endswith(suffix):
+        path = path[:-len(suffix)]
+    elif suffix in path:
+        raise ValueError("API 地址结尾应为 /chat/completions；请检查是否误带 svg 等文字")
+    return urlunsplit((url.scheme, url.netloc, path, "", ""))
+
+
+def chat_completions_url(value: str) -> str:
+    return normalize_base_url(value) + "/chat/completions"
 
 
 def deep_merge(base: dict, override: dict) -> dict:
@@ -75,7 +95,7 @@ def resolve_api_key(cfg: dict, explicit: str | None) -> str | None:
     key = os.environ.get(env_name)
     if key:
         return key.strip()
-    if llm.get("allow_dsh_credentials", True):
+    if llm.get("allow_dsh_credentials", False):
         return load_dsh_key(env_name)
     return None
 
@@ -90,7 +110,7 @@ def api_key_source(cfg: dict, explicit: str | None) -> str:
     env_name = llm.get("api_key_env") or "DEEPSEEK_API_KEY"
     if os.environ.get(env_name):
         return f"环境变量 {env_name}"
-    if llm.get("allow_dsh_credentials", True) and load_dsh_key(env_name):
+    if llm.get("allow_dsh_credentials", False) and load_dsh_key(env_name):
         return "DSH 凭据 ~/.dsh/.credentials.yaml"
     return "未配置"
 
@@ -135,8 +155,10 @@ def parse_llm_json(content: str) -> dict:
 
 def ask_llm_blocking(cfg: dict, q: dict, api_key: str) -> dict:
     llm = cfg["llm"]
-    base = llm["base_url"].rstrip("/")
-    url = base + "/chat/completions"
+    try:
+        url = chat_completions_url(llm["base_url"])
+    except ValueError as exc:
+        return {"ok": False, "error": str(exc)}
     payload = {
         "model": llm["model"],
         "messages": [
@@ -147,11 +169,14 @@ def ask_llm_blocking(cfg: dict, q: dict, api_key: str) -> dict:
         "max_tokens": llm.get("max_tokens", 600),
         "stream": False,
     }
+    if llm.get("reasoning_effort") is not None:
+        payload["reasoning_effort"] = llm["reasoning_effort"]
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     last_exc = None
     for attempt in range(2):
         try:
-            r = requests.post(url, json=payload, headers=headers, timeout=llm.get("timeout", 60))
+            r = requests.post(url, json=payload, headers=headers,
+                              timeout=llm.get("timeout", 60), allow_redirects=False)
             if r.status_code != 200:
                 raise RuntimeError(f"HTTP {r.status_code}: {r.text[:300]}")
             data = r.json()
@@ -160,7 +185,7 @@ def ask_llm_blocking(cfg: dict, q: dict, api_key: str) -> dict:
         except Exception as exc:  # 网络抖动重试一次
             last_exc = exc
             time.sleep(1.2)
-    return {"ok": False, "error": str(last_exc)}
+    return {"ok": False, "error": str(last_exc).replace(api_key, "[REDACTED]")}
 
 
 def normalize_llm_answer(data: dict, q: dict) -> dict:

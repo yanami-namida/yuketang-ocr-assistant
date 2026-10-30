@@ -1,5 +1,10 @@
 # 雨课堂 AI 参考助手
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Tests](https://github.com/yanami-namida/yuketang-ocr-assistant/actions/workflows/tests.yml/badge.svg)](https://github.com/yanami-namida/yuketang-ocr-assistant/actions/workflows/tests.yml)
+
+Windows OCR 驱动的非官方雨课堂学习辅助工具，支持自定义 Chat Completions 模型提供方。
+
 上课时自动盯（长江）雨课堂网页版的随堂题：认出题型 / 题干 / 选项 / 剩余时间 → 调大模型出参考答案 → 显示在网页浮层和日志里；可选自动填选项、自动提交。
 
 真实随堂题大多是一张 PPT 截图，DOM 里连 A/B/C/D 都没有。脚本用 **Windows 自带 OCR**（`Windows.Media.Ocr`，不需要 tesseract / PaddleOCR）把图里的题干和选项还原成文字，再和页面上的圆钮按钮对齐。
@@ -30,6 +35,11 @@
 
 ```
 雨课堂/
+├─ LICENSE                 MIT 开源许可证
+├─ CONTRIBUTING.md         开发与贡献说明
+├─ SECURITY.md             安全与隐私说明
+├─ THIRD_PARTY_NOTICES.md   第三方依赖与参考来源
+├─ CHANGELOG.md            更新记录
 ├─ ykt_watcher.py          浏览器版主程序（抓题 / 浮层 / 自动作答）
 ├─ ykt_llm.py              模型调用与答案解析
 ├─ ocr_win.py              Windows OCR 封装 + 题目文字解析
@@ -50,7 +60,8 @@
 ├─ docs/
 │  ├─ api-key.md           怎么配 Key：三种存法、换服务商、报错对照
 │  ├─ architecture.md      实现说明：链路、抓题策略、踩过的坑
-│  └─ overlay-demo.png     浮层效果图
+│  ├─ overlay-demo.png     本地模拟页面浮层效果图
+│  └─ demo-question.svg    合成图片题（不依赖个人截图）
 └─ tests/
    ├─ test_dom.py          抓题 / 答案绑定 / 点击提交（18 项）
    ├─ test_ocr.py          编码、圆钮、页脚按钮等 OCR 解析（12 项）
@@ -69,7 +80,10 @@
 ## 安装
 
 ```powershell
-cd 雨课堂
+git clone https://github.com/yanami-namida/yuketang-ocr-assistant.git
+cd yuketang-ocr-assistant
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
 
 # 可选但强烈建议：配一把模型 Key（也能直接双击 设置APIKey.bat）
@@ -77,6 +91,8 @@ python tools\set_api_key.py
 ```
 
 Key 的三种存法、换服务商、报错对照都在 [`docs/api-key.md`](docs/api-key.md)。
+双击启动器使用 `python` 命令；若使用虚拟环境，请在激活环境的终端中启动，
+或直接使用 `.\.venv\Scripts\python.exe` 运行各入口。
 
 ## 快速开始（浏览器版）
 
@@ -101,13 +117,16 @@ python ykt_watcher.py --window 14:00-15:40 --auto-fill --auto-submit
 
 `--window` 也接受 `8:00~9:40`、`08:00到09:40`，跨零点用 `--window 23:30-00:30`。
 
-### 本地自测（不用登录、不联网）
+### 本地模拟（不用登录）
 
 ```powershell
 python ykt_watcher.py --mock --duration 2                  # 完整流程（含浮层）
 python ykt_watcher.py --mock --once --headless             # 只验证抓题
 python ykt_watcher.py --mock --mock-query "t=20&auto=1"    # 20 秒后自动切第 2 题（多选）
 ```
+
+模拟页面在本地运行；如果配置了有效密钥，完整监控流程仍会调用模型。
+`--mock --once --headless` 只验证抓题，离线回归测试则会模拟模型请求。
 
 > `--mock`、`--once`、`--dump` 和正式监控共用同一份 `edge_profile\`，不能和正在跑的实例同时开。
 
@@ -191,7 +210,13 @@ python ykt_watcher.py --mock --mock-query "t=20&auto=1"    # 20 秒后自动切�
 模型：deepseek-chat @ https://api.deepseek.com/v1（Key 来源：config.json 的 llm.api_key）
 ```
 
-没有 Key 也能跑：只抓题、显示题目和倒计时，不生成答案。接口按 OpenAI 兼容的 `/chat/completions` 调用，换本地 ollama 或其它网关只需改 `base_url` / `model`。
+没有 Key 也能跑：只抓题、显示题目和倒计时，不生成答案。接口按兼容的 `/chat/completions` 格式调用，支持基础地址或完整接口地址。换本地 Ollama 或其它网关只需改 `base_url` / `model`。DSH 凭据复用在样例配置中默认关闭，需自行开启。
+
+例如华为云 MaaS（按提示输入自己的密钥）：
+
+```powershell
+python tools\set_api_key.py --yes --base-url https://api.modelarts-maas.com/v2 --model deepseek-v4.1-flash-1017 --api-key-env MAAS_API_KEY --reasoning-effort none
+```
 
 > Key 只存在本机：`config.json` 在 `.gitignore` 里，不会被提交；`--show` 只显示打码后的 Key；泄露了就去服务商控制台吊销重建。
 
@@ -208,8 +233,8 @@ python ykt_watcher.py --mock --mock-query "t=20&auto=1"    # 20 秒后自动切�
 ## 测试
 
 ```powershell
-python -m unittest tests.test_ocr tests.test_dom tests.test_llm -v   # 39 项，离线可跑
-python -m unittest tests.test_http -v                 # 需要 requirements-http.txt
+python -m pip install -r requirements.txt -r requirements-http.txt
+python -m unittest discover -s tests -v
 ```
 
 DOM 用例用本地 HTML 夹具并 mock 掉 OCR，不需要登录、不联网。
@@ -257,13 +282,20 @@ OCR 输出编码问题：`powershell.exe` 按控制台代码页输出，中文�
 
 `edge_profile\` 和 `ykt_state.json` 等同于你的雨课堂账号，`shots\` / `dump\` / `answers.jsonl` / `ykt_watch.log` 里可能有课堂内容和截图。这些路径都已加入 `.gitignore`。
 
-分享（打包 / 传 Git）之前，先清掉本机运行痕迹：
+分享源码时，从已提交的文件生成压缩包，无需删除本机配置和登录态：
 
 ```powershell
-# 在项目目录里执行；会删掉登录态、截图、日志，下次用要重新扫码
-Remove-Item edge_profile, shots, dump, __pycache__ -Recurse -Force -ErrorAction SilentlyContinue
-Remove-Item ykt_state.json, config.json, ykt_watch.log, answers.jsonl, watch_stdout.log, watch_stderr.log -Force -ErrorAction SilentlyContinue
+git archive --format=zip --prefix=yuketang-ocr-assistant/ --output=../yuketang-ocr-assistant-source.zip HEAD
 ```
+
+只有已审查并提交的文件会进入压缩包。不要使用 `git add -f` 强制添加配置或运行记录。
+外部模型会收到识别后的题目文字，更多说明见 [SECURITY.md](SECURITY.md)。
+
+## 开源与贡献
+
+本项目采用 [MIT 许可证](LICENSE)。使用、修改和分发时请保留版权与许可证声明。
+第三方依赖、平台名称和外部参考资料适用其各自条款，见 [第三方说明](THIRD_PARTY_NOTICES.md)。
+提交问题和代码前请阅读 [贡献指南](CONTRIBUTING.md)；版本变化见 [更新记录](CHANGELOG.md)。
 
 ## 免责声明
 

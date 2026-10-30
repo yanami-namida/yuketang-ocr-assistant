@@ -7,7 +7,7 @@
 | 文件 | 职责 |
 | --- | --- |
 | `ykt_watcher.py` | 浏览器版全部逻辑：启动 Edge、进课堂、抓题、调模型、浮层、自动填/提交；单文件里也内嵌了三段注入页面的 JS（`PROBE_JS` / `OVERLAY_JS` / `SUBMIT_FALLBACK_JS` / `SLIDE_JS`） |
-| `ykt_llm.py` | 模型侧：解析 API Key（参数 → 环境变量 → DSH 凭据）、调用 OpenAI 兼容接口、把模型返回规整成 `selected` 字母列表 |
+| `ykt_llm.py` | 模型侧：解析 API Key（参数 → 本地配置 → 环境变量 → 可选 DSH 凭据）、统一基础/完整接口地址、调用模型、把模型返回规整成 `selected` 字母列表 |
 | `ocr_win.py` | 图片题 OCR：调用 Windows 自带 `Windows.Media.Ocr`，把逐词坐标拼成行、行分块，再解析成「题型 / 题干 / 选项」 |
 | `win_ocr.ps1` | 上述 PowerShell 脚本的落盘副本（`ocr_win.py` 会按内嵌内容自动重写，可单独命令行调用调试） |
 | `ykt_http.py` | HTTP 版：不开浏览器，用 Cookie 走 HTTP + WebSocket 收题、上传答案；`ykt_api.py` 是它的兼容入口，`ykt_http_menu.py` 是双击 .bat 用的中文菜单 |

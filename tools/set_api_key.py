@@ -16,7 +16,6 @@ import argparse
 import getpass
 import json
 import os
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -24,12 +23,15 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 CONFIG_FILE = BASE_DIR / "config.json"
 EXAMPLE_FILE = BASE_DIR / "config.example.json"
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
+from ykt_llm import chat_completions_url, normalize_base_url
 
 DEFAULT_LLM = {
     "base_url": "https://api.deepseek.com/v1",
     "model": "deepseek-chat",
     "api_key_env": "DEEPSEEK_API_KEY",
-    "allow_dsh_credentials": True,
+    "allow_dsh_credentials": False,
 }
 
 PROVIDERS = {
@@ -39,6 +41,8 @@ PROVIDERS = {
           "qwen-plus"),
     "4": ("硅基流动 SiliconFlow", "https://api.siliconflow.cn/v1", "deepseek-ai/DeepSeek-V3"),
     "5": ("本地 Ollama（无需 key）", "http://127.0.0.1:11434/v1", "qwen2.5:7b"),
+    "6": ("华为云 ModelArts MaaS", "https://api.modelarts-maas.com/v2",
+          "deepseek-v4.1-flash-1017"),
 }
 
 
@@ -46,7 +50,7 @@ PROVIDERS = {
 # 配置文件读写
 # ----------------------------------------------------------------------------
 def load_raw_config(path: Path | None = None) -> dict:
-    """读 config.json；没有就用 config.example.json 复制一份；再没有就用内置默认值。"""
+    """读取配置或样例；只有保存时才创建文件。"""
     path = path or CONFIG_FILE
     if path.exists():
         try:
@@ -54,10 +58,8 @@ def load_raw_config(path: Path | None = None) -> dict:
         except (OSError, json.JSONDecodeError) as exc:
             raise SystemExit(f"config.json 解析失败：{exc}\n请修好它或删掉后重新运行本脚本。")
     if EXAMPLE_FILE.exists():
-        shutil.copyfile(EXAMPLE_FILE, path)
-    cfg = {"llm": dict(DEFAULT_LLM)}
-    save_raw_config(cfg, path)
-    return cfg
+        return json.loads(EXAMPLE_FILE.read_text(encoding="utf-8-sig"))
+    return {"llm": dict(DEFAULT_LLM)}
 
 
 def save_raw_config(cfg: dict, path: Path | None = None) -> None:
@@ -99,7 +101,7 @@ def resolve(cfg: dict, explicit: str | None = None) -> tuple[str | None, str]:
     if env:
         return env.strip(), f"环境变量 {env_name}"
     dsh = Path(os.environ.get("USERPROFILE", str(Path.home()))) / ".dsh" / ".credentials.yaml"
-    if llm.get("allow_dsh_credentials", True) and dsh.exists():
+    if llm.get("allow_dsh_credentials", False) and dsh.exists():
         import re
         m = re.search(rf"{re.escape(env_name)}\s*:\s*['\"]?([A-Za-z0-9_\-\.]+)",
                       dsh.read_text(encoding="utf-8", errors="ignore"))
@@ -109,42 +111,46 @@ def resolve(cfg: dict, explicit: str | None = None) -> tuple[str | None, str]:
 
 
 def check_key(cfg: dict, key: str) -> tuple[bool, str]:
-    """用 /models 轻量验证 key；不支持该接口的服务退回一次最小 chat 请求。"""
+    """用一次小型 chat 请求验证地址、鉴权和模型；可能产生少量费用。"""
     import requests
 
     llm = get_llm(cfg)
-    base = (llm.get("base_url") or DEFAULT_LLM["base_url"]).rstrip("/")
-    headers = {"Authorization": f"Bearer {key}"}
     try:
-        r = requests.get(f"{base}/models", headers=headers, timeout=20)
-        if r.status_code == 200:
-            return True, "鉴权通过（GET /models）"
-        if r.status_code == 401:
-            return False, "key 无效或已被吊销（401）"
-        if r.status_code == 403:
-            return False, "key 无权限（403），可能未开通该模型"
-        if r.status_code not in (404, 405):
-            return False, f"服务返回 {r.status_code}：{(r.text or '')[:120]}"
-    except requests.RequestException as exc:
-        return False, f"连不上 {base}：{type(exc).__name__}: {exc}"
-
+        url = chat_completions_url(llm.get("base_url") or DEFAULT_LLM["base_url"])
+    except ValueError as exc:
+        return False, str(exc)
+    headers = {"Authorization": f"Bearer {key}"}
+    payload = {"model": llm.get("model") or DEFAULT_LLM["model"],
+               "messages": [{"role": "user", "content": "Reply OK."}],
+               "max_tokens": 8, "stream": False}
+    if llm.get("reasoning_effort") is not None:
+        payload["reasoning_effort"] = llm["reasoning_effort"]
     try:
         r = requests.post(
-            f"{base}/chat/completions",
+            url,
             headers={**headers, "Content-Type": "application/json"},
-            json={"model": llm.get("model") or DEFAULT_LLM["model"],
-                  "messages": [{"role": "user", "content": "ping"}], "max_tokens": 1},
-            timeout=30,
+            json=payload,
+            timeout=llm.get("timeout", 60),
+            allow_redirects=False,
         )
     except requests.RequestException as exc:
-        return False, f"连不上 {base}：{type(exc).__name__}: {exc}"
+        return False, f"连接失败：{type(exc).__name__}"
     if r.status_code == 200:
-        return True, "鉴权通过（POST /chat/completions）"
+        try:
+            message = r.json()["choices"][0]["message"]
+            if not isinstance(message, dict):
+                raise ValueError("missing message")
+        except (ValueError, KeyError, IndexError, TypeError):
+            return False, "返回 200，但响应不是兼容的 Chat Completions JSON"
+        return True, "地址、鉴权和模型调用通过（POST /chat/completions）"
     if r.status_code == 401:
         return False, "key 无效或已被吊销（401）"
     if r.status_code == 402:
         return False, "账户余额不足（402）"
-    return False, f"服务返回 {r.status_code}：{(r.text or '')[:120]}"
+    if r.status_code == 403:
+        return False, "key 无权限（403），可能未开通该模型"
+    # 不回显原始响应，网关可能把请求中的凭据包含在错误信息里。
+    return False, f"服务返回 {r.status_code}；请检查接口地址、模型名称、权限和额度"
 
 
 def set_user_env(name: str, value: str) -> None:
@@ -169,12 +175,14 @@ def ask_provider(llm: dict) -> None:
     if choice in PROVIDERS:
         _, base, model = PROVIDERS[choice]
         llm["base_url"], llm["model"] = base, model
+        if choice == "6":
+            llm["reasoning_effort"] = "none"
         print(f"已切换到 {base} / {model}")
     elif choice == str(len(PROVIDERS) + 1):
         base = input(f"base_url [{llm.get('base_url')}]> ").strip()
         model = input(f"模型名 [{llm.get('model')}]> ").strip()
         if base:
-            llm["base_url"] = base.rstrip("/")
+            llm["base_url"] = normalize_base_url(base)
         if model:
             llm["model"] = model
 
@@ -184,6 +192,8 @@ def main() -> int:
     ap.add_argument("--key", help="直接给 key（不填则交互输入，输入时不回显）")
     ap.add_argument("--base-url", help="覆盖 llm.base_url，例如 https://api.deepseek.com/v1")
     ap.add_argument("--model", help="覆盖 llm.model，例如 deepseek-chat")
+    ap.add_argument("--api-key-env", help="密钥环境变量名，例如 MAAS_API_KEY")
+    ap.add_argument("--reasoning-effort", help="提供方支持的推理强度，例如 none / low / high")
     ap.add_argument("--env", action="store_true", help="写入用户环境变量，而不是 config.json")
     ap.add_argument("--session", action="store_true", help="只打印当前窗口临时生效的命令，不改文件")
     ap.add_argument("--check", action="store_true", help="只校验当前已配置的 key")
@@ -199,6 +209,20 @@ def main() -> int:
 
     cfg = load_raw_config()
     llm = get_llm(cfg)
+    if args.base_url:
+        try:
+            llm["base_url"] = normalize_base_url(args.base_url)
+        except ValueError as exc:
+            ap.error(str(exc))
+    if args.model:
+        llm["model"] = args.model
+    if args.api_key_env:
+        import re
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", args.api_key_env):
+            ap.error("环境变量名只能包含英文字母、数字和下划线，且不能以数字开头")
+        llm["api_key_env"] = args.api_key_env
+    if args.reasoning_effort:
+        llm["reasoning_effort"] = args.reasoning_effort
     env_name = llm.get("api_key_env") or "DEEPSEEK_API_KEY"
 
     if args.show:
@@ -229,11 +253,6 @@ def main() -> int:
         print(("通过：" if ok else "失败：") + msg)
         return 0 if ok else 2
 
-    if args.base_url:
-        llm["base_url"] = args.base_url.rstrip("/")
-    if args.model:
-        llm["model"] = args.model
-
     key = (args.key or "").strip()
     if not key and not sys.stdin.isatty():
         print("非交互环境请用 --key 传 key，例如：python tools/set_api_key.py --key sk-xxxx")
@@ -256,11 +275,11 @@ def main() -> int:
                 key = typed.strip()
                 if not key:
                     print("不能为空，请重新输入。")
-        except (EOFError, KeyboardInterrupt):
+        except (EOFError, KeyboardInterrupt, ValueError) as exc:
             print("\n已取消，没有改动任何文件。")
+            if isinstance(exc, ValueError):
+                print(str(exc))
             return 1
-        if not key.startswith(("sk-", "sk_")) and key != "ollama":
-            print("提示：大多数服务商的 key 以 sk- 开头，请确认没有粘错（仍会继续）。")
 
     if args.session:
         shell = "PowerShell" if os.name == "nt" else "shell"
@@ -270,6 +289,8 @@ def main() -> int:
 
     if args.env:
         set_user_env(env_name, key)
+        llm.pop("api_key", None)
+        save_raw_config(cfg)
         print(f"已写入用户环境变量 {env_name}（打码：{mask_key(key)}，{len(key)} 位）。")
         print("注意：只对新开的窗口生效；已经打开的终端和启动器要关掉重开。")
     else:
@@ -278,7 +299,7 @@ def main() -> int:
         print(f"已写入 {CONFIG_FILE}（打码：{mask_key(key)}，{len(key)} 位）。")
 
     print(f"服务商 {llm.get('base_url')}   模型 {llm.get('model')}")
-    print("\n正在校验……")
+    print("\n正在校验（一次小型模型请求，可能产生少量费用）……")
     ok, msg = check_key(cfg, key)
     print(("校验通过：" if ok else "校验失败：") + msg)
     if not ok:

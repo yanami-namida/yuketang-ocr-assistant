@@ -136,7 +136,7 @@ DEFAULT_CONFIG = {
         "base_url": "https://api.deepseek.com/v1",
         "model": "deepseek-chat",
         "api_key_env": "DEEPSEEK_API_KEY",
-        "allow_dsh_credentials": True,   # 没设环境变量时，读取 ~/.dsh/.credentials.yaml 里的 DEEPSEEK_API_KEY
+        "allow_dsh_credentials": False,  # 如需复用 DSH 凭据，请显式设为 True
         "temperature": 0.2,
         "max_tokens": 600,
         "timeout": 60,

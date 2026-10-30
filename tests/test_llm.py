@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
+import io
 import os
+import sys
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import ykt_llm
 from tools import set_api_key
@@ -69,6 +72,18 @@ class ResolvePriorityTests(unittest.TestCase):
 
 
 class MaskAndConfigTests(unittest.TestCase):
+    def test_first_run_preserves_example_without_writing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.json"
+            example = Path(tmp) / "example.json"
+            example.write_text(json.dumps({"poll_interval": 7, "llm": {"model": "sample"}}),
+                               encoding="utf-8")
+            with patch.object(set_api_key, "EXAMPLE_FILE", example):
+                cfg = set_api_key.load_raw_config(path)
+            self.assertEqual(cfg["poll_interval"], 7)
+            self.assertEqual(cfg["llm"]["model"], "sample")
+            self.assertFalse(path.exists())
+
     def test_mask_hides_middle(self):
         masked = set_api_key.mask_key("sk-1234567890abcdef")  # 19 位：前 6 + 9 个星 + 后 4
         self.assertEqual(masked, "sk-123" + "*" * 9 + "cdef")
@@ -96,6 +111,101 @@ class MaskAndConfigTests(unittest.TestCase):
             saved["llm"].pop("api_key")
             set_api_key.save_raw_config(saved, path)
             self.assertNotIn("api_key", json.loads(path.read_text(encoding="utf-8"))["llm"])
+
+
+class CustomProviderTests(unittest.TestCase):
+    BASE = "https://api.modelarts-maas.com/v2"
+    MODEL = "deepseek-v4.1-flash-1017"
+
+    def test_base_and_full_endpoint_are_equivalent(self):
+        for url in (self.BASE, self.BASE + "/", self.BASE + "/chat/completions",
+                    " " + self.BASE + "/chat/completions/ "):
+            with self.subTest(url=url):
+                self.assertEqual(ykt_llm.chat_completions_url(url), self.BASE + "/chat/completions")
+        self.assertEqual(ykt_llm.chat_completions_url("http://localhost:11434/v1"),
+                         "http://localhost:11434/v1/chat/completions")
+
+    def test_malformed_endpoint_is_rejected(self):
+        for url in (self.BASE + "/chat/completionssvg", "file:///tmp/key",
+                    "https://example.com/v1?key=private", "https://user:secret@example.com/v1"):
+            with self.subTest(url=url), self.assertRaises(ValueError):
+                ykt_llm.chat_completions_url(url)
+
+    def test_real_request_uses_custom_model_and_optional_reasoning(self):
+        response = Mock(status_code=200)
+        response.json.return_value = {"choices": [{"message": {"content":
+            '{"answer":"B","confidence":0.9,"reason":"test"}'}}]}
+        cfg = cfg_with(base_url=self.BASE + "/chat/completions", model=self.MODEL,
+                       reasoning_effort="none")
+        question = {"kind": "单选", "stem": "1 + 1 = ?", "options": [
+            {"label": "A", "text": "1"}, {"label": "B", "text": "2"}]}
+        with patch.object(ykt_llm.requests, "post", return_value=response) as post:
+            result = ykt_llm.ask_llm_blocking(cfg, question, "fake-maas-key")
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["data"]["answer"], "B")
+        self.assertEqual(post.call_args.args[0], self.BASE + "/chat/completions")
+        self.assertEqual(post.call_args.kwargs["json"]["model"], self.MODEL)
+        self.assertEqual(post.call_args.kwargs["json"]["reasoning_effort"], "none")
+        self.assertFalse(post.call_args.kwargs["allow_redirects"])
+
+    def test_check_validates_selected_model_without_models_endpoint(self):
+        response = Mock(status_code=200)
+        response.json.return_value = {"choices": [{"message": {"content": "OK"}}]}
+        cfg = cfg_with(base_url=self.BASE + "/chat/completions", model=self.MODEL)
+        with patch.object(ykt_llm.requests, "post", return_value=response) as post, \
+                patch.object(ykt_llm.requests, "get") as get:
+            ok, _ = set_api_key.check_key(cfg, "fake-maas-key")
+        self.assertTrue(ok)
+        get.assert_not_called()
+        self.assertEqual(post.call_args.args[0], self.BASE + "/chat/completions")
+        self.assertEqual(post.call_args.kwargs["json"]["model"], self.MODEL)
+
+    def test_check_rejects_non_chat_200_response(self):
+        response = Mock(status_code=200)
+        response.json.return_value = {"error": "not a chat response"}
+        with patch.object(ykt_llm.requests, "post", return_value=response):
+            ok, _ = set_api_key.check_key(cfg_with(), "fake-key")
+        self.assertFalse(ok)
+
+    def test_error_response_does_not_echo_credentials(self):
+        response = Mock(status_code=400, text="request echoed fake-private-key")
+        with patch.object(ykt_llm.requests, "post", return_value=response):
+            ok, message = set_api_key.check_key(cfg_with(), "fake-private-key")
+        self.assertFalse(ok)
+        self.assertNotIn("fake-private-key", message)
+
+    def test_check_applies_cli_overrides_without_saving(self):
+        cfg = cfg_with(api_key="fake-key")
+        argv = ["set_api_key.py", "--check", "--base-url", self.BASE + "/chat/completions",
+                "--model", self.MODEL, "--reasoning-effort", "none"]
+        with patch.object(sys, "argv", argv), \
+                patch.object(set_api_key, "load_raw_config", return_value=cfg), \
+                patch.object(set_api_key, "save_raw_config") as save, \
+                patch.object(set_api_key, "check_key", return_value=(True, "OK")) as check, \
+                redirect_stdout(io.StringIO()):
+            self.assertEqual(set_api_key.main(), 0)
+        save.assert_not_called()
+        checked = check.call_args.args[0]["llm"]
+        self.assertEqual(checked["base_url"], self.BASE)
+        self.assertEqual(checked["model"], self.MODEL)
+        self.assertEqual(checked["reasoning_effort"], "none")
+
+    def test_env_mode_persists_provider_and_removes_stale_config_key(self):
+        cfg = cfg_with(api_key="fake-stale")
+        argv = ["set_api_key.py", "--env", "--key", "fake-new", "--base-url", self.BASE,
+                "--model", self.MODEL, "--api-key-env", "MAAS_API_KEY"]
+        with patch.object(sys, "argv", argv), \
+                patch.object(set_api_key, "load_raw_config", return_value=cfg), \
+                patch.object(set_api_key, "set_user_env") as env, \
+                patch.object(set_api_key, "save_raw_config") as save, \
+                patch.object(set_api_key, "check_key", return_value=(True, "OK")), \
+                redirect_stdout(io.StringIO()):
+            self.assertEqual(set_api_key.main(), 0)
+        env.assert_called_once_with("MAAS_API_KEY", "fake-new")
+        saved = save.call_args.args[0]["llm"]
+        self.assertNotIn("api_key", saved)
+        self.assertEqual(saved["base_url"], self.BASE)
+        self.assertEqual(saved["model"], self.MODEL)
 
 
 if __name__ == "__main__":
