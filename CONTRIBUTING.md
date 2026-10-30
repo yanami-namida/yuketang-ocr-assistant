@@ -23,3 +23,9 @@ git diff --check
 
 源码和 Markdown 使用 UTF-8、LF；`.bat` 和 `.ps1` 按 `.gitattributes` 使用 CRLF。
 提交贡献即表示你有权以本项目的 [MIT 许可证](LICENSE) 提供这些内容。
+
+## Windows 桌面版
+
+源码入口为 `ykt_desktop.py`，打包命令和路径说明见 [桌面版文档](docs/desktop.md)。
+请在独立虚拟环境安装 `requirements-build.txt`，不要向构建参数添加真实配置或整个项目目录。
+验证 EXE 时可设置 `YKT_DATA_DIR` 为临时测试目录，避免访问开发者的个人登录态。

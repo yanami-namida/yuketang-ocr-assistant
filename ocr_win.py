@@ -10,8 +10,9 @@ import re
 import subprocess
 import sys
 from pathlib import Path
+from ykt_paths import data_dir
 
-BASE_DIR = Path(__file__).resolve().parent
+BASE_DIR = data_dir()
 PS1 = BASE_DIR / "win_ocr.ps1"
 # 明确用 64 位 PowerShell（32 位进程里 WinRT OCR 不可用）
 PS_EXE = os.path.join(os.environ.get("SystemRoot", r"C:\Windows"),
@@ -89,6 +90,7 @@ KIND_WORDS = (
 
 
 def ensure_ps1() -> Path:
+    PS1.parent.mkdir(parents=True, exist_ok=True)
     if not PS1.exists() or PS1.read_text(encoding="utf-8", errors="ignore") != PS1_CODE:
         PS1.write_text(PS1_CODE, encoding="utf-8")
     return PS1
@@ -126,6 +128,7 @@ def ocr_boxes(image_path: str | Path, timeout: int = 90) -> list[dict]:
             [PS_EXE, "-NoProfile", "-ExecutionPolicy", "Bypass",
              "-File", str(PS1), "-Path", str(path)],
             capture_output=True, timeout=timeout,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
     except Exception as exc:
         OCR_ERRORS.append(f"{type(exc).__name__}: {exc}")

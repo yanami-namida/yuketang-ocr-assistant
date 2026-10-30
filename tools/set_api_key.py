@@ -20,12 +20,14 @@ import subprocess
 import sys
 from pathlib import Path
 
-BASE_DIR = Path(__file__).resolve().parent.parent
-CONFIG_FILE = BASE_DIR / "config.json"
-EXAMPLE_FILE = BASE_DIR / "config.example.json"
-if str(BASE_DIR) not in sys.path:
-    sys.path.insert(0, str(BASE_DIR))
+SOURCE_DIR = Path(__file__).resolve().parent.parent
+if str(SOURCE_DIR) not in sys.path:
+    sys.path.insert(0, str(SOURCE_DIR))
+from ykt_paths import data_dir, resource_dir
 from ykt_llm import chat_completions_url, normalize_base_url
+BASE_DIR = data_dir()
+CONFIG_FILE = BASE_DIR / "config.json"
+EXAMPLE_FILE = resource_dir() / "config.example.json"
 
 DEFAULT_LLM = {
     "base_url": "https://api.deepseek.com/v1",

@@ -3,6 +3,11 @@
 本仓库源码采用 [MIT 许可证](LICENSE)。第三方组件仍适用各自的许可证；
 本仓库未打包浏览器、Windows OCR 引擎或以下依赖的源码。
 
+Windows EXE 版本内置 Python、Tcl/Tk 及运行依赖。下载 Windows ZIP 时请保留随附的
+`licenses/` 目录，其中包含依赖版本清单和从构建环境收集的许可证、版权及第三方声明。
+Python 及 Tcl/Tk 按各自许可证分发；PyInstaller 引导程序适用其 GPL 许可证及
+[引导程序分发例外](https://pyinstaller.org/en/stable/license.html)，本项目源码仍采用 MIT。
+
 ## 运行依赖
 
 - [Playwright for Python](https://github.com/microsoft/playwright-python)：浏览器控制。

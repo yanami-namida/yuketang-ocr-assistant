@@ -5,6 +5,18 @@
 
 Windows OCR 驱动的非官方雨课堂学习辅助工具，支持自定义 Chat Completions 模型提供方。
 
+## Windows 桌面版：无需命令行
+
+在 [最新 Release](https://github.com/yanami-namida/yuketang-ocr-assistant/releases/latest)
+下载 `windows-x64.zip`，解压后双击 **`YuketangAssistant.exe`**。无需安装 Python。
+
+在窗口中选择提供方、输入密钥，点击“保存配置” → “扫码登录” → “开始监控”。
+支持自定义 API、华为云 MaaS、连接测试、定时监控、HTTP 模式和停止任务。
+配置和登录态保存在 Windows 用户目录，更新 EXE 后可继续使用。
+详细步骤见 [Windows 桌面版说明](docs/desktop.md)。
+
+下文的 Python 安装和命令行说明适用于源码版。
+
 上课时自动盯（长江）雨课堂网页版的随堂题：认出题型 / 题干 / 选项 / 剩余时间 → 调大模型出参考答案 → 显示在网页浮层和日志里；可选自动填选项、自动提交。
 
 真实随堂题大多是一张 PPT 截图，DOM 里连 A/B/C/D 都没有。脚本用 **Windows 自带 OCR**（`Windows.Media.Ocr`，不需要 tesseract / PaddleOCR）把图里的题干和选项还原成文字，再和页面上的圆钮按钮对齐。
@@ -40,6 +52,8 @@ Windows OCR 驱动的非官方雨课堂学习辅助工具，支持自定义 Chat
 ├─ SECURITY.md             安全与隐私说明
 ├─ THIRD_PARTY_NOTICES.md   第三方依赖与参考来源
 ├─ CHANGELOG.md            更新记录
+├─ ykt_desktop.py          Windows 图形配置与任务窗口
+├─ ykt_paths.py            源码/EXE 的资源与用户数据路径
 ├─ ykt_watcher.py          浏览器版主程序（抓题 / 浮层 / 自动作答）
 ├─ ykt_llm.py              模型调用与答案解析
 ├─ ocr_win.py              Windows OCR 封装 + 题目文字解析
@@ -296,6 +310,7 @@ git archive --format=zip --prefix=yuketang-ocr-assistant/ --output=../yuketang-o
 本项目采用 [MIT 许可证](LICENSE)。使用、修改和分发时请保留版权与许可证声明。
 第三方依赖、平台名称和外部参考资料适用其各自条款，见 [第三方说明](THIRD_PARTY_NOTICES.md)。
 提交问题和代码前请阅读 [贡献指南](CONTRIBUTING.md)；版本变化见 [更新记录](CHANGELOG.md)。
+Windows 分发包附带 `licenses/`，包含随程序打包的 Python 及第三方依赖许可证。
 
 ## 免责声明
 

@@ -17,6 +17,7 @@ from html import unescape
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import urlsplit
+from ykt_paths import data_dir, stop_requested
 
 try:
     import requests
@@ -32,7 +33,7 @@ except Exception:  # 非 Windows / 缺组件时退化为「只显示图片路径
     _ocr_boxes = _ocr_parse = None
     OCR_ERRORS = []
 
-BASE_DIR = Path(__file__).resolve().parent
+BASE_DIR = data_dir()
 DEFAULT_CONFIG = {
     "duration_min": 45,
     "llm": {"base_url": "https://api.deepseek.com/v1", "model": "deepseek-chat",
@@ -602,7 +603,7 @@ class Monitor:
             raise ApiError("缺少 websocket-client，请安装 requirements-http.txt") from exc
         until, failures = time.monotonic() + self.args.duration * 60, 0
         try:
-            while time.monotonic() < until and not self.finished:
+            while time.monotonic() < until and not self.finished and not stop_requested():
                 try:
                     token = self.client.checkin(self.lesson_id)
                     cookie = self.client.session.prepare_request(requests.Request("GET", self.client.base + "/wsapp/")).headers.get("Cookie", "")
@@ -616,7 +617,7 @@ class Monitor:
                     self.got_hello = False
                     self.send({"op": "hello", "userid": self.uid, "role": "student", "auth": token, "lessonid": self.lesson_id})
                     last_ping, started = time.monotonic(), time.monotonic()
-                    while time.monotonic() < until and not self.finished:
+                    while time.monotonic() < until and not self.finished and not stop_requested():
                         try:
                             message = self.ws.recv()
                             if not message:

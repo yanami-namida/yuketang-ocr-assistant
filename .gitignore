@@ -35,3 +35,8 @@ ykt_http.log
 build/
 dist/
 *.egg-info/
+
+# 桌面版源码运行时的独立演示和进程控制文件
+demo/
+tmp/
+desktop-stop-*

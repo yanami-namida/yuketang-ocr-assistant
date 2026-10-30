@@ -51,6 +51,7 @@ import traceback
 from tempfile import TemporaryDirectory
 from datetime import datetime, timedelta
 from pathlib import Path
+from ykt_paths import data_dir, resource_dir, stop_requested
 
 try:
     from playwright.async_api import async_playwright
@@ -86,7 +87,7 @@ for _stream in (sys.stdout, sys.stderr):
         pass
 
 
-BASE_DIR = Path(__file__).resolve().parent
+BASE_DIR = data_dir()
 CONFIG_FILE = BASE_DIR / "config.json"
 STATE_FILE = BASE_DIR / "ykt_state.json"
 PROFILE_DIR = BASE_DIR / "edge_profile"
@@ -1390,7 +1391,7 @@ async def wait_login(page, timeout: int = 300) -> bool:
     qr_hint = re.compile(r"扫码|二维码|微信登录|请用微信|登录后|密码登录|验证码")
     logged_hint = re.compile(r"我的课堂|我的课程|退出登录|个人中心|学习记录|我的班级|课程表|全部课程")
     ok_streak = 0
-    while time.time() < deadline:
+    while time.time() < deadline and not stop_requested():
         await asyncio.sleep(2)
         url = page.url
         if re.search(r"login|passport|register|authorize", url, re.I):
@@ -1502,7 +1503,7 @@ async def watch(cfg: dict, args) -> None:
     url = cfg["url"]
     if args.mock:
         query = getattr(args, "mock_query", None) or "t=90&auto=1"
-        url = (BASE_DIR / "mock_quiz.html").resolve().as_uri() + "?" + query.lstrip("?")
+        url = (resource_dir() / "mock_quiz.html").resolve().as_uri() + "?" + query.lstrip("?")
 
     end_time = None
     if args.window:
@@ -1510,7 +1511,11 @@ async def watch(cfg: dict, args) -> None:
         wait = (start - datetime.now()).total_seconds()
         if wait > 1:
             log(f"等待监控开始：{mmss(int(wait))} 后（{start:%H:%M}）")
-            await asyncio.sleep(wait)
+            while datetime.now() < start:
+                if stop_requested():
+                    log("已停止等待。")
+                    return
+                await asyncio.sleep(min(1, max(0, (start - datetime.now()).total_seconds())))
         end_time = end
         log(f"进入时间窗口监控：{start:%H:%M} - {end:%H:%M}")
     else:
@@ -1596,7 +1601,7 @@ async def watch(cfg: dict, args) -> None:
         def time_left() -> float:
             return (end_time - datetime.now()).total_seconds()
 
-        while time_left() > 0:
+        while time_left() > 0 and not stop_requested():
             try:
                 if page.is_closed():
                     log("页面被关闭，重新打开。")
