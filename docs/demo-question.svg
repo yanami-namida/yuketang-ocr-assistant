@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="700" viewBox="0 0 1000 700">
+  <rect width="1000" height="700" fill="white"/>
+  <g fill="#172b4d" font-family="Microsoft YaHei, sans-serif">
+    <text x="70" y="90" font-size="38">单选题</text>
+    <text x="70" y="200" font-size="36">以下哪个数是偶数？</text>
+    <text x="100" y="310" font-size="34">A. 1</text>
+    <text x="100" y="410" font-size="34">B. 2</text>
+    <text x="100" y="510" font-size="34">C. 3</text>
+    <text x="100" y="610" font-size="34">D. 5</text>
+  </g>
+</svg>

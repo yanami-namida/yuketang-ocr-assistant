@@ -1,0 +1,315 @@
+# 雨课堂 AI 参考助手
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Tests](https://github.com/yanami-namida/yuketang-ocr-assistant/actions/workflows/tests.yml/badge.svg)](https://github.com/yanami-namida/yuketang-ocr-assistant/actions/workflows/tests.yml)
+
+一个**只读**的非官方雨课堂学习辅助工具：帮你看清随堂题、给出参考答案，但**不替你点选项、不替你交卷**。支持截图直接识题，支持自定义 Chat Completions 多模态模型提供方。
+
+> **本项目不做代答。** 工具不会点击网页选项、不会提交答案、不会自动签到，也不提供任何直接调用平台接口的“后台版”。请把它当作「第二双眼睛」，最终是否作答、如何作答由你本人决定，并请遵守课堂纪律与学校规定。完整边界见 [使用条款](ACCEPTABLE_USE.md)。
+
+## Windows 桌面版：无需命令行
+
+在 [最新 Release](https://github.com/yanami-namida/yuketang-ocr-assistant/releases/latest)
+下载 `windows-x64.zip`，解压后双击 **`YuketangAssistant.exe`**。无需安装 Python。
+
+在窗口中选择提供方、输入密钥，点击“保存配置” → “扫码登录” → “开始监控”。
+支持自定义 API、华为云 MaaS、连接测试、定时监控和停止任务。
+配置和登录态保存在 Windows 用户目录，更新 EXE 后可继续使用。
+详细步骤见 [Windows 桌面版说明](docs/desktop.md)。
+
+下文的 Python 安装和命令行说明适用于源码版。
+
+## 它做什么
+
+上课时盯住（长江）雨课堂网页版的随堂题：认出题型 / 题干 / 选项 / 剩余时间 → 调大模型出参考答案 → 显示在网页浮层和日志里。**到这一步为止。**
+
+真实随堂题大多是一张 PPT 截图，DOM 里通常只有 A/B/C/D 圆钮。浏览器版默认**自动检测模型图片能力：实测通过优先上传题目截图，其余使用 Windows OCR 后发送文本**。视觉模型一次识别题干、选项并作答，结果只用于显示。默认模型为 `deepseek-flash`（V4.1 Flash），也支持华为云 `deepseek-v4.1-flash-1017`。
+
+截图前会隐藏助手浮层；模型必须逐项返回与网页一致的选项字母和完整正文，避免页脚日期、网址被顺序补成 D。设置 `image_mode=ocr` 或加 `--no-vision` 可手动使用原 Windows OCR 路径。
+
+“测试连接”先验证文本，再上传一张本机随机生成的数字图，必须实际读对才判定图片测试通过。结果绑定 API 地址、模型、密钥和推理强度；自动模式未有有效结果时在启动监控时检测。界面可选“自动检测（推荐）/ 上传图片 / OCR 扫描文本”；命令行使用 `--image-mode auto|vision|ocr`。网络异常标为暂未验证，自动模式暂用 OCR，可手动重测。
+
+![浮层效果](docs/overlay-demo.png)
+
+## 设计边界
+
+公开版本刻意只保留「读」的能力：
+
+| 能力 | 状态 |
+| --- | --- |
+| 读取你自己已登录的课堂页面、识别题目 | ✅ 保留 |
+| 调用模型生成参考答案并显示 | ✅ 保留 |
+| 自动进入正在上课的教室、签到 | ❌ 不提供 |
+| 点击网页选项、替你在页面上作答 | ❌ 不提供 |
+| 提交答案、调用交卷/答题接口 | ❌ 不提供 |
+| 直接调用平台接口的后台模式 | ❌ 不提供 |
+
+代码里没有任何 `click` 网页选项、提交按钮或请求答题接口的路径；相关测试也只是验证「识别结果不会触发点击」。如果你需要自动化操作，请自行评估并遵守平台协议与学校规定，本项目不接受此类改动。
+
+## 特性
+
+- **文字/图片识题**：文字题直接读 DOM；图片题直接发图给多模态模型，不要求 OCR 先识别成功。
+- **答题控件检测（只用于判断页面是否在出题）**：图片题需检测到网页选项或主观题提交控件，正常讲课幻灯片不会逐页发送给模型。
+- **只读安全**：不点击选项、不提交、不签到；页面上已有选择时只显示答案，不覆盖。
+- **答案缓存在本地**：同一道题再次出现秒出答案。
+- **零第三方 OCR 依赖**：只用 Windows 自带识别引擎，中英文混排、折行、`L oa d` 这类拆字都会拼回去。
+
+## 目录结构
+
+```
+雨课堂/
+├─ LICENSE                 MIT 开源许可证
+├─ ACCEPTABLE_USE.md       使用条款：只读、非官方、禁止代答/批量刷课
+├─ CONTRIBUTING.md         开发与贡献说明
+├─ SECURITY.md             安全与隐私说明
+├─ THIRD_PARTY_NOTICES.md   第三方依赖与参考来源
+├─ CHANGELOG.md            更新记录
+├─ ykt_desktop.py          Windows 图形配置与任务窗口
+├─ ykt_paths.py            源码/EXE 的资源与用户数据路径
+├─ ykt_watcher.py          主程序（抓题 / 浮层 / 日志）
+├─ ykt_llm.py              模型调用与答案解析
+├─ ocr_win.py              Windows OCR 封装 + 题目文字解析
+├─ win_ocr.ps1             OCR 的 PowerShell 脚本（由 ocr_win.py 自动同步）
+├─ mock_quiz.html          文字题模拟页（--mock 用）
+├─ mock_image.html         图片题模拟页（单独验证 OCR 用）
+├─ 启动雨课堂助手.bat        双击菜单
+├─ 设置APIKey.bat           配模型 Key（双击粘贴，写进本机 config.json）
+├─ config.example.json     配置样例（复制成 config.json 后改）
+├─ requirements.txt        运行依赖
+├─ tools/
+│  └─ set_api_key.py       设置 Key 的命令行脚本（bat 只是包装）
+├─ docs/
+│  ├─ api-key.md           怎么配 Key：三种存法、换服务商、报错对照
+│  ├─ architecture.md      实现说明：链路、抓题策略、踩过的坑
+│  ├─ overlay-demo.png     本地模拟页面浮层效果图
+│  └─ demo-question.svg    合成图片题（不依赖个人截图）
+└─ tests/
+   ├─ test_dom.py          抓题、选项锚定与识别绑定
+   ├─ test_ocr.py          编码、圆钮、页脚按钮等 OCR 解析
+   ├─ test_llm.py          Key 优先级 / 配置读写
+   ├─ test_vision.py       视觉请求与结果校验
+   ├─ test_capabilities.py 图片能力探测与缓存
+   └─ test_desktop.py      桌面版参数与配置
+```
+
+运行时才会生成（都已在 `.gitignore` 里）：`edge_profile/`（登录态）、`shots/`（抓题截图）、`dump/`（现场快照）、`ykt_watch.log`、`answers.jsonl`、`config.json`。
+
+## 环境要求
+
+- Windows 10 / 11（图片题 OCR 依赖系统自带的 `Windows.Media.Ocr`）
+- Python 3.10+
+- Microsoft Edge（脚本用 `channel="msedge"` 启动，不需要 `playwright install` 下载浏览器）
+
+## 安装
+
+```powershell
+git clone https://github.com/yanami-namida/yuketang-ocr-assistant.git
+cd yuketang-ocr-assistant
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+
+# 可选但强烈建议：配一把模型 Key（也能直接双击 设置APIKey.bat）
+python tools\set_api_key.py
+```
+
+Key 的三种存法、换服务商、报错对照都在 [`docs/api-key.md`](docs/api-key.md)。
+双击启动器使用 `python` 命令；若使用虚拟环境，请在激活环境的终端中启动，
+或直接使用 `.\.venv\Scripts\python.exe` 运行各入口。
+
+## 快速开始
+
+```powershell
+# 0. 配 Key（一次就够；没有 Key 也能跑到第 2 步，只是不出答案）
+python tools\set_api_key.py
+
+# 1. 扫码登录一次，登录态存进 edge_profile\
+python ykt_watcher.py --login
+
+# 2. 盯 45 分钟
+python ykt_watcher.py --duration 45
+
+# 3. 只在某节课的时间窗内盯（到点自动退出）
+python ykt_watcher.py --window 14:00-15:40
+```
+
+不想敲命令就双击 **`启动雨课堂助手.bat`**（菜单：登录 / 定时监控 / 时间窗口 / 模拟测试 / 调试快照）。
+
+`--window` 也接受 `8:00~9:40`、`08:00到09:40`，跨零点用 `--window 23:30-00:30`。
+
+### 本地模拟（不用登录）
+
+```powershell
+python ykt_watcher.py --mock --duration 2                  # 完整流程（含浮层）
+python ykt_watcher.py --mock --once --headless             # 只验证抓题
+python ykt_watcher.py --mock --mock-query "t=20&auto=1"    # 20 秒后自动切第 2 题（多选）
+```
+
+模拟页面在本地运行；如果配置了有效密钥，完整监控流程仍会调用模型。
+`--mock --once --headless` 只验证抓题，离线回归测试则会模拟模型请求。
+
+> `--mock`、`--once`、`--dump` 和正式监控共用同一份 `edge_profile\`，不能和正在跑的实例同时开。
+
+## 它怎么工作
+
+完整链路和实现细节见 [`docs/architecture.md`](docs/architecture.md)，这里只讲用户视角：
+
+1. **找课**：带你已登录的 Cookie 调 `GET /api/v3/classroom/on-lesson`，有课在播就直接打开 `https://changjiang.yuketang.cn/lesson/fullscreen/v3/<lessonId>`，不靠猜按钮；没有课就打印提示等着。这只是读取「哪节课正在上」，不会替你签到或进入答题状态。
+2. **抓题**：每 2.5 秒（可配）扫一遍页面所有 frame，按「题型词 / 选项数 / 提交按钮 / 倒计时」给候选容器打分；文字题直接读 DOM，图片题截取题图及对应的选项按钮（提交按钮只用于判断「这确实是一道题」，不会被点击）。
+3. **出答案**：后台异步调模型，题目先显示、答案后到；同一道题按 `signature` 缓存。
+4. **提示**：网页右上角浮层显示状态、倒计时（≤60 秒变红）、题型、参考答案、置信度与理由；剩余 120/60/30 秒时响提示音。
+
+## 浮层怎么用
+
+- 深色卡片：状态点（灰=等题、黄=生成中、绿=有答案、红=出错）+ 倒计时 + 题型 + 参考答案大字 + 置信度/理由 + 题干 + 选项（命中项绿色高亮）。
+- 首次出现会自动避开题目面板；按住标题条可拖动，双击复位（位置记在 localStorage）。
+- 倒计时每秒刷新；换题自动清空旧答案。
+
+## 参数
+
+| 参数 | 说明 |
+| --- | --- |
+| `--login` / `--login-timeout N` | 扫码登录并保存登录态（默认等 300 秒） |
+| `--duration N` | 监控 N 分钟（默认 45，可小数） |
+| `--window 14:00-15:40` | 只在时间窗口内监控 |
+| `--interval 2.5` | 轮询间隔（秒） |
+| `--url URL` | 覆盖入口地址（例如直接给听课页） |
+| `--headless` | 无头模式（没有窗口，也就没有浮层） |
+| `--no-overlay` / `--no-sound` | 关浮层 / 关提示音 |
+| `--once` | 只探测一次，打印抓到的题目 JSON |
+| `--mock` / `--mock-query` | 用本地模拟页面跑 |
+| `--dump` | 调试：回车存截图 + HTML 并打印解析结果 |
+| `--kill-stale` | 启动前清掉占着 `edge_profile` 的残留 Edge |
+| `--heartbeat N` | 周期心跳日志（秒，默认 0 关闭） |
+| `--auto-enter` / `--no-auto-enter` | 自动打开正在上的课（默认开，只导航不签到） |
+| `--no-ocr` | 关闭备用 OCR；不影响默认视觉识图 |
+| `--no-vision` | 关闭直接发图，改用原 Windows OCR + 文本模型路径 |
+| `--image-mode auto/vision/ocr` | 自动检测 / 手动上传图片 / 手动 OCR 扫描文本 |
+| `--api-key` / `--model` / `--base-url` | 覆盖模型配置 |
+| `--config` | 指定配置文件 |
+| `--debug` | 打印异常堆栈 |
+
+## 配置
+
+首次运行会自动生成 `config.json`（也可以把 `config.example.json` 复制过去改），改完重启生效。模型 Key 用 `设置APIKey.bat` 写进 `llm.api_key`，也可以手改或改用环境变量（见下一节）。常用项：
+
+| 键 | 默认 | 说明 |
+| --- | --- | --- |
+| `poll_interval` | 2.5 | 轮询间隔（秒） |
+| `duration_min` | 45 | 默认监控时长 |
+| `question_gone_reset` | 20 | 题目消失多少秒后允许重新识别同一题 |
+| `answer_cache_ttl` | 1800 | 同题答案缓存时间（秒） |
+| `low_time_warn` | `[120,60,30]` | 剩余时间提醒阈值（秒） |
+| `image_mode` | auto | 按实测结果选择图片或 OCR；vision/ocr 可手动指定 |
+| `vision` | true | 兼容旧版开关；新配置优先使用 image_mode |
+| `dump_on_miss` / `dump_cooldown` | 45 / 180 | 连续多久没抓到就存快照 / 两次快照最小间隔 |
+| `save_screenshots` | true | 抓题时是否截图到 `shots\` |
+| `selectors` | 见样例 | 题目容器候选选择器，抓不到时优先补这里 |
+| `llm.*` | DeepSeek | `base_url` / `model` / `api_key` / `api_key_env` / `timeout` 等 |
+| `llm.vision_max_tokens` | 1800 | 图片题输出预算，包含完整题干与选项 |
+
+## 模型 Key
+
+项目里**不附带任何 Key**。最省事的配法：双击 **`设置APIKey.bat`**（或运行 `python tools\set_api_key.py`），粘贴 Key → 写进本机 `config.json` → 当场调接口校验一次。完整说明见 [`docs/api-key.md`](docs/api-key.md)。
+
+按顺序尝试：`--api-key` 参数 → `config.json` 的 `llm.api_key` → 环境变量 `DEEPSEEK_API_KEY`（或 `llm.api_key_env` 指定的名字）→ DSH 凭据 `~/.dsh/.credentials.yaml`。启动日志会打印实际用的是哪一把：
+
+```text
+模型：deepseek-flash @ https://api.deepseek.com/v1（Key 来源：config.json 的 llm.api_key）
+```
+
+没有 Key 也能跑：只抓题、显示题目和倒计时，不生成答案。接口按兼容的 `/chat/completions` 格式调用，支持基础地址或完整接口地址。换本地 Ollama 或其它网关只需改 `base_url` / `model`。DSH 凭据复用在样例配置中默认关闭，需自行开启。
+
+例如华为云 MaaS（按提示输入自己的密钥）：
+
+```powershell
+python tools\set_api_key.py --yes --base-url https://api.modelarts-maas.com/v2 --model deepseek-v4.1-flash-1017 --api-key-env MAAS_API_KEY --reasoning-effort none
+```
+
+> Key 只存在本机：`config.json` 在 `.gitignore` 里，不会被提交；`--show` 只显示打码后的 Key；泄露了就去服务商控制台吊销重建。
+
+## 产出文件
+
+| 文件 | 内容 |
+| --- | --- |
+| `ykt_watch.log` | 运行日志（抓到的题、AI 建议、提醒） |
+| `answers.jsonl` | 每道题的完整记录（题干、选项、答案、置信度、理由、signature） |
+| `shots\` | 抓题截图、发送给视觉模型的 `vision_*.png`，以及备用 OCR 原图 |
+| `dump\` | `--dump` / 自动诊断保存的现场快照 |
+| `edge_profile\` | 浏览器登录态（别删，删了要重新扫码） |
+
+`answers.jsonl` 只记录识别结果，不记录任何点击或提交动作——因为工具不会执行它们。
+
+## 测试
+
+```powershell
+python -m pip install -r requirements.txt
+python -m unittest discover -s tests -v
+```
+
+DOM 用例用本地 HTML 夹具并 mock 掉 OCR，不需要登录、不联网。测试只断言识别与锚定结果，并验证识别结果不会产生点击或提交。
+
+## 抓不到题怎么办
+
+1. `python ykt_watcher.py --dump`：进到有题的页面后回车，存截图和 HTML 并打印解析结果；
+2. 课堂页连续 45 秒没认出来时脚本会自动存快照到 `dump\`（日志里有 `[诊断]` / `[抓题诊断]` 行）；也可以手动：在程序目录建一个空文件 `dump_now`，下一轮就会存一份；
+3. 快照里的 `probe_details` 会写清 DOM 拿到了什么、OCR 拿到了什么、用的哪个识别引擎——照着它判断是「没截到图」「OCR 没读出字」还是「标签对不上」；
+4. 常见原因：题目还在加载、题目在跨域 iframe（脚本已遍历所有 frame）、题目图太小没被选为候选、识别引擎不是中文（见下）。
+
+## 常见问题
+
+**浏览器窗口要一直放最前面吗？**
+不用。被遮住、失去焦点都不影响：脚本通过 CDP 直接读页面。唯一要注意的是**别把窗口最小化**——Chromium 对最小化页面暂停渲染，图片题可能截到旧画面。要后台跑就用 `--headless`。
+
+**报 `TargetClosedError` / `exitCode=21`，或提示 Edge 进程占着 `edge_profile`。**
+同一份 profile 同时只能被一个浏览器使用，通常是上次没退干净：
+
+```powershell
+python ykt_watcher.py --kill-stale --window 14:00-15:40
+```
+
+或手动清：
+
+```powershell
+Get-CimInstance Win32_Process -Filter "Name='msedge.exe'" |
+  Where-Object { $_.CommandLine -like '*edge_profile*' } |
+  ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
+```
+
+**日志里只有 `A`、`B` 这样的选项，题干是空的。**
+OCR 输出编码问题：`powershell.exe` 按控制台代码页输出，中文被当成乱码丢弃。本项目已在 `win_ocr.ps1` 强制 UTF-8，并在 Python 侧做了 GBK/UTF-16 解码兜底；如果自己改过脚本，注意不要退回 `encoding="utf-8", errors="ignore"` 的写法。
+
+**OCR 识别出 `0不可靠的…` 这种前缀。**
+图片上的圆钮被识别成 `0` 并粘进了选项正文。`ocr_win.py` 里 `_is_circle()` / `_strip_circle_prefix()` 负责清理；换分辨率或换主题后如果复现，按实际圆钮尺寸调 `_is_circle()` 的阈值。
+
+**答案看起来不对。**
+视觉模型也可能误读或推理出错。先核对日志中的“视觉识别”题干和 A—D 正文；若正文正确而答案不对，则属于模型判断问题。备用 OCR 路径还可能有文字识别错误。
+
+**PowerShell 里看不到输出。**
+别用 `| Select-Object -Last N` 这类管道（会缓冲），直接看终端，或 `Get-Content ykt_watch.log -Tail 20`。
+
+## 隐私
+
+`edge_profile\` 等同于你的雨课堂账号，`shots\` / `dump\` / `answers.jsonl` / `ykt_watch.log` 里可能有课堂内容和截图。这些路径都已加入 `.gitignore`。
+
+分享源码时，从已提交的文件生成压缩包，无需删除本机配置和登录态：
+
+```powershell
+git archive --format=zip --prefix=yuketang-ocr-assistant/ --output=../yuketang-ocr-assistant-source.zip HEAD
+```
+
+只有已审查并提交的文件会进入压缩包。不要使用 `git add -f` 强制添加配置或运行记录。
+外部模型会收到题目文字，默认视觉模式还会发送题目区域截图，更多说明见 [SECURITY.md](SECURITY.md)。
+
+## 开源与贡献
+
+本项目采用 [MIT 许可证](LICENSE)。使用、修改和分发时请保留版权与许可证声明。
+第三方依赖、平台名称和外部参考资料适用其各自条款，见 [第三方说明](THIRD_PARTY_NOTICES.md)。
+提交问题和代码前请阅读 [贡献指南](CONTRIBUTING.md)；版本变化见 [更新记录](CHANGELOG.md)。
+Windows 分发包附带 `licenses/`，包含随程序打包的 Python 及第三方依赖许可证。
+
+## 免责声明
+
+本项目与雨课堂、学堂在线及其运营方无任何关联，名称仅用于说明适用场景。
+
+本工具仅用于个人学习辅助：读取你**自己可见**的课堂页面内容，给出参考建议，不绕过任何权限、不执行任何作答或提交动作。请遵守课堂纪律、学校规定和平台用户协议；不得用于代答、替考、批量刷课或任何扰乱教学秩序与网络服务的行为。使用本工具产生的一切后果由使用者自行承担。

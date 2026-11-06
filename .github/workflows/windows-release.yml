@@ -1,0 +1,55 @@
+name: Windows desktop release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install build dependencies
+        run: python -m pip install -r requirements-build.txt
+      - name: Run regression tests
+        run: python -m unittest discover -s tests -q
+      - name: Check tag version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          python -c "import os; from ykt_version import VERSION; assert os.environ['GITHUB_REF_NAME'] == 'v' + VERSION"
+      - name: Build EXE and Windows ZIP
+        run: python tools/build_windows.py
+      - name: Verify packaged program
+        run: python tools/smoke_windows.py
+      - name: Save build artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: windows-x64
+          path: |
+            dist/windows/YuketangAssistant.exe
+            dist/windows/*windows-x64.zip
+            dist/windows/SHA256SUMS.txt
+          if-no-files-found: error
+      - name: Publish tagged release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view $env:GITHUB_REF_NAME *> $null
+          if ($LASTEXITCODE -eq 0) {
+            Write-Output 'Release already exists; verified build is available as an artifact.'
+            exit 0
+          }
+          $taskNotes = 'docs/releases/' + $env:GITHUB_REF_NAME + '.md'
+          $taskWindowsZip = 'dist/windows/yuketang-ocr-assistant-' + $env:GITHUB_REF_NAME + '-windows-x64.zip'
+          gh release create $env:GITHUB_REF_NAME dist/windows/YuketangAssistant.exe $taskWindowsZip dist/windows/SHA256SUMS.txt --verify-tag --title "$($env:GITHUB_REF_NAME) — Windows 桌面版" --notes-file $taskNotes --latest
